@@ -4,7 +4,7 @@ import {
   authenticateServerRequest,
   verifyConversationOwnership,
   getServerSupabase,
-} from '../_lib/supabaseServer'
+} from '../_lib/supabaseServer.js'
 
 const UpdateTitleSchema = z.object({
   title: z.string().min(1, 'Title cannot be empty').max(100),

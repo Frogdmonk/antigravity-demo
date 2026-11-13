@@ -11,6 +11,28 @@ interface StreamChatOptions {
   onError: (error: string) => void
 }
 
+async function parseErrorResponse(response: Response): Promise<string> {
+  try {
+    const text = await response.text()
+    try {
+      const json = JSON.parse(text)
+      if (json.error) {
+        return typeof json.error === 'string'
+          ? json.error
+          : json.error.message || JSON.stringify(json.error)
+      }
+      if (json.message) return json.message
+    } catch {
+      if (text && !text.trim().startsWith('<')) {
+        return `Server error (${response.status}): ${text.slice(0, 150)}`
+      }
+    }
+  } catch {
+    // Ignore read failure
+  }
+  return `Server error (${response.status}). Make sure GEMINI_API_KEY is added in your Vercel Project Environment Variables.`
+}
+
 export const chatApi = {
   async streamChat({
     conversationId,
@@ -46,13 +68,7 @@ export const chatApi = {
       })
 
       if (!response.ok) {
-        let errMessage = `Server error (${response.status})`
-        try {
-          const json = await response.json()
-          if (json.error) errMessage = typeof json.error === 'string' ? json.error : JSON.stringify(json.error)
-        } catch {
-          // Response was not JSON
-        }
+        const errMessage = await parseErrorResponse(response)
         onError(errMessage)
         return
       }
@@ -99,7 +115,6 @@ export const chatApi = {
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        // Handled cleanly via abort signal
         return
       }
       onError(err instanceof Error ? err.message : 'Network error during stream.')
@@ -137,13 +152,7 @@ export const chatApi = {
       })
 
       if (!response.ok) {
-        let errMessage = `Server error (${response.status})`
-        try {
-          const json = await response.json()
-          if (json.error) errMessage = typeof json.error === 'string' ? json.error : JSON.stringify(json.error)
-        } catch {
-          // Non-JSON
-        }
+        const errMessage = await parseErrorResponse(response)
         onError(errMessage)
         return
       }

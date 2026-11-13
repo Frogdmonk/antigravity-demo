@@ -3,7 +3,7 @@ import { z } from 'zod'
 import {
   authenticateServerRequest,
   getServerSupabase,
-} from '../_lib/supabaseServer'
+} from '../_lib/supabaseServer.js'
 
 const UpdateMessageSchema = z.object({
   content: z.string().min(1, 'Content cannot be empty'),

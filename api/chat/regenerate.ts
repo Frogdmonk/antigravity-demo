@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import {
@@ -5,21 +6,23 @@ import {
   formatGeminiContents,
   generateStreamWithFallback,
   type ChatMessageInput,
-} from '../_lib/gemini'
+} from '../_lib/gemini.js'
 import {
   authenticateServerRequest,
   verifyConversationOwnership,
   getServerSupabase,
-} from '../_lib/supabaseServer'
+} from '../_lib/supabaseServer.js'
 
 const RegenerateBodySchema = z.object({
   conversationId: z.string().min(1, 'conversationId is required'),
-  messages: z.array(
-    z.object({
-      role: z.enum(['user', 'assistant']),
-      content: z.string(),
-    })
-  ).min(1),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string(),
+      })
+    )
+    .min(1),
 })
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -27,56 +30,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' })
   }
 
-  const authHeader = req.headers.authorization
-  const { userId, error: authError } = await authenticateServerRequest(authHeader)
-
-  if (!userId) {
-    return res.status(401).json({ error: authError || 'Unauthorized' })
-  }
-
-  const parseResult = RegenerateBodySchema.safeParse(req.body)
-  if (!parseResult.success) {
-    return res.status(400).json({
-      error: 'Invalid request body',
-      details: parseResult.error.flatten(),
-    })
-  }
-
-  const { conversationId, messages } = parseResult.data
-  const token = authHeader?.replace('Bearer ', '').trim()
-
-  const isOwner = await verifyConversationOwnership(conversationId, userId, token)
-  if (!isOwner) {
-    return res.status(403).json({ error: 'Forbidden: You do not own this conversation' })
-  }
-
-  // Preceding context: If the last message in the array is assistant, remove it so Gemini regenerates from the user turn
-  const precedingContext = [...messages]
-  if (precedingContext.length > 0 && precedingContext[precedingContext.length - 1].role === 'assistant') {
-    precedingContext.pop()
-  }
-
-  if (precedingContext.length === 0) {
-    return res.status(400).json({ error: 'No preceding user prompt found to regenerate.' })
-  }
-
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
-  res.setHeader('Cache-Control', 'no-cache, no-transform')
-  res.setHeader('Connection', 'keep-alive')
-  res.setHeader('X-Accel-Buffering', 'no')
-  if (typeof res.flushHeaders === 'function') {
-    res.flushHeaders()
-  }
-
-  let isAborted = false
-  req.on('close', () => {
-    isAborted = true
-  })
-
-  let fullResponse = ''
-  let status: 'completed' | 'interrupted' | 'failed' = 'completed'
+  let headersSent = false
 
   try {
+    const authHeader = req.headers.authorization
+    const { userId, error: authError } = await authenticateServerRequest(authHeader)
+
+    if (!userId) {
+      return res.status(401).json({ error: authError || 'Unauthorized' })
+    }
+
+    const rawBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
+    const parseResult = RegenerateBodySchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Invalid request body',
+        details: parseResult.error.flatten(),
+      })
+    }
+
+    const { conversationId, messages } = parseResult.data
+    const token = authHeader?.replace('Bearer ', '').trim()
+
+    const isOwner = await verifyConversationOwnership(conversationId, userId, token)
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this conversation' })
+    }
+
+    // Preceding context: If the last message in the array is assistant, remove it so Gemini regenerates from the user turn
+    const precedingContext = [...messages]
+    if (
+      precedingContext.length > 0 &&
+      precedingContext[precedingContext.length - 1].role === 'assistant'
+    ) {
+      precedingContext.pop()
+    }
+
+    if (precedingContext.length === 0) {
+      return res.status(400).json({ error: 'No preceding user prompt found to regenerate.' })
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders()
+    }
+    headersSent = true
+
+    let isAborted = false
+    req.on('close', () => {
+      isAborted = true
+    })
+
+    let fullResponse = ''
+    let status: 'completed' | 'interrupted' | 'failed' = 'completed'
+
     const { client, model } = getGeminiClient()
     const contents = formatGeminiContents(precedingContext as ChatMessageInput[])
 
@@ -108,21 +118,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })}\n\n`
     )
 
-    const supabase = getServerSupabase(token)
-    if (supabase && fullResponse.trim()) {
-      await supabase.from('messages').insert({
-        id: assistantMessageId,
-        conversation_id: conversationId,
-        role: 'assistant',
-        content: fullResponse,
-        status,
-        model: usedModel,
-      })
+    try {
+      const supabase = getServerSupabase(token)
+      if (supabase && fullResponse.trim() && userId !== 'development-user' && userId !== 'anonymous-user') {
+        await supabase.from('messages').insert({
+          id: assistantMessageId,
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: fullResponse,
+          status,
+          model: usedModel,
+        })
 
-      await supabase
-        .from('conversations')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', conversationId)
+        await supabase
+          .from('conversations')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', conversationId)
+      }
+    } catch (dbErr) {
+      console.warn('Database persistence warning:', dbErr)
     }
 
     res.end()
@@ -130,6 +144,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Error during regeneration:', err)
     const errorMessage =
       err instanceof Error ? err.message : 'An error occurred during regeneration.'
+
+    if (!headersSent && !res.headersSent) {
+      return res.status(500).json({ error: errorMessage })
+    }
 
     res.write(
       `data: ${JSON.stringify({
