@@ -15,6 +15,7 @@ import {
 
 const RegenerateBodySchema = z.object({
   conversationId: z.string().min(1, 'conversationId is required'),
+  agentMode: z.boolean().optional().default(true),
   messages: z
     .array(
       z.object({
@@ -49,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     }
 
-    const { conversationId, messages } = parseResult.data
+    const { conversationId, messages, agentMode } = parseResult.data
     const token = authHeader?.replace('Bearer ', '').trim()
 
     const isOwner = await verifyConversationOwnership(conversationId, userId, token)
@@ -93,7 +94,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { responseStream, usedModel } = await generateStreamWithFallback(
       client,
       model,
-      contents
+      contents,
+      agentMode
     )
 
     for await (const chunk of responseStream) {

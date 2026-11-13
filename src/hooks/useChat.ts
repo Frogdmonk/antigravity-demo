@@ -8,12 +8,34 @@ interface UseChatProps {
   onCreateConversation?: (firstMessage: string) => Promise<{ id: string } | null>
 }
 
+const AGENT_MODE_STORAGE_KEY = 'gemini_chat_agent_mode'
+
 export function useChat({ conversationId, onCreateConversation }: UseChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [streamingMessage, setStreamingMessage] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [agentMode, setAgentMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(AGENT_MODE_STORAGE_KEY)
+      return saved === null ? true : saved === 'true'
+    } catch {
+      return true
+    }
+  })
+
+  const toggleAgentMode = useCallback(() => {
+    setAgentMode((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(AGENT_MODE_STORAGE_KEY, String(next))
+      } catch {
+        // Ignore storage error
+      }
+      return next
+    })
+  }, [])
 
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -120,6 +142,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
       conversationId: targetConvId,
       messageContent: textToSend,
       messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
+      agentMode,
       signal: abortController.signal,
       onChunk: (chunk) => {
         setStreamingMessage((prev) => prev + chunk)
@@ -191,6 +214,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
     await chatApi.regenerateChat({
       conversationId,
       messages: workingContext.map((m) => ({ role: m.role, content: m.content })),
+      agentMode,
       signal: abortController.signal,
       onChunk: (chunk) => {
         setStreamingMessage((prev) => prev + chunk)
@@ -280,6 +304,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
       conversationId,
       messageContent: newContent,
       messages: truncated.map((m) => ({ role: m.role, content: m.content })),
+      agentMode,
       signal: abortController.signal,
       onChunk: (chunk) => {
         setStreamingMessage((prev) => prev + chunk)
@@ -342,6 +367,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
     isGenerating,
     streamingMessage,
     error,
+    agentMode,
+    toggleAgentMode,
   }
 }
-

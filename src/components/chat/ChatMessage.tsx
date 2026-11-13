@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Sparkles, Copy, Check, RotateCw, Pencil, AlertCircle, StopCircle } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { AgentLoopView } from './AgentLoopView'
+import { parseAgentContent, stripAgentBlocks } from '@/utils/agentParser'
 import { Message } from '@/types/chat'
 import { Button } from '@/components/ui/button'
 
@@ -24,10 +26,17 @@ export function ChatMessage({
   const [editContent, setEditContent] = useState(message.content)
 
   const isUser = message.role === 'user'
+  const isStreamingThisMessage = !isUser && (message.status === 'pending' || (isLastAssistant && isGenerating))
+
+  const parsedAgent = useMemo(() => {
+    if (isUser) return null
+    return parseAgentContent(message.content, isStreamingThisMessage)
+  }, [isUser, message.content, isStreamingThisMessage])
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(message.content)
+      const cleanText = isUser ? message.content : stripAgentBlocks(message.content)
+      await navigator.clipboard.writeText(cleanText)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -73,6 +82,12 @@ export function ChatMessage({
               {isUser ? 'You' : 'Gemini'}
             </span>
 
+            {!isUser && parsedAgent?.hasAgentLoop && (
+              <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary border border-primary/20 select-none">
+                Agentic Loop
+              </span>
+            )}
+
             {/* Status indicators */}
             {!isUser && message.status === 'interrupted' && (
               <span className="inline-flex items-center space-x-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -113,6 +128,13 @@ export function ChatMessage({
               {isUser ? (
                 <div className="whitespace-pre-wrap leading-relaxed text-foreground">
                   {message.content}
+                </div>
+              ) : parsedAgent?.hasAgentLoop ? (
+                <div>
+                  <AgentLoopView parsed={parsedAgent} />
+                  {parsedAgent.finalAnswer && (
+                    <MarkdownRenderer content={parsedAgent.finalAnswer} />
+                  )}
                 </div>
               ) : (
                 <MarkdownRenderer content={message.content} />
@@ -173,4 +195,3 @@ export function ChatMessage({
     </div>
   )
 }
-

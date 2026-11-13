@@ -28,6 +28,8 @@ export function ChatPage() {
     isGenerating,
     streamingMessage,
     error,
+    agentMode,
+    toggleAgentMode,
   } = useChat({
     conversationId: activeConversationId,
     onCreateConversation: async (firstMsg) => {
@@ -75,6 +77,8 @@ export function ChatPage() {
         }}
         isGenerating={isGenerating}
         streamingMessage={streamingMessage}
+        agentMode={agentMode}
+        onToggleAgentMode={toggleAgentMode}
       />
     </AppLayout>
   )

@@ -16,6 +16,7 @@ import {
 const ChatBodySchema = z.object({
   conversationId: z.string().min(1, 'conversationId is required'),
   messageContent: z.string().min(1, 'messageContent cannot be empty'),
+  agentMode: z.boolean().optional().default(true),
   messages: z
     .array(
       z.object({
@@ -52,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     }
 
-    const { conversationId, messages } = parseResult.data
+    const { conversationId, messages, agentMode } = parseResult.data
     const token = authHeader?.replace('Bearer ', '').trim()
 
     // 3. Verify conversation ownership
@@ -85,7 +86,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { responseStream, usedModel } = await generateStreamWithFallback(
       client,
       model,
-      contents
+      contents,
+      agentMode
     )
 
     for await (const chunk of responseStream) {

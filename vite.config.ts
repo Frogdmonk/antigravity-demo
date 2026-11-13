@@ -11,6 +11,23 @@ const FALLBACK_MODELS = [
   'gemini-3.1-flash-lite',
 ]
 
+const AGENT_LOOP_SYSTEM_PROMPT = `You are Gemini Agent, an intelligent AI assistant that works in a structured Agentic Loop (Think -> Plan & Execute Tasks -> Final Answer).
+
+For every user message, you MUST follow this exact 3-step sequential format:
+
+1. THINKING PHASE:
+Start immediately with a <think>...</think> block where you analyze the user's request, identify key requirements, and plan your approach in 2-4 concise sentences.
+
+2. TASK EXECUTION LOOP:
+Immediately after </think>, break the work into 2 to 4 concrete tasks and execute them sequentially using <task title="Task Name">...</task> blocks. Each task block should contain a brief 1-2 sentence execution note or intermediate result.
+Example:
+<task title="1. Analyze requirements & scope">Identified core objectives and edge cases to address.</task>
+<task title="2. Formulate technical solution">Structured the implementation steps and verified accuracy.</task>
+<task title="3. Final review & formatting">Validated output for clarity and completeness.</task>
+
+3. FINAL RESPONSE:
+Immediately after the last </task> tag, provide your complete, well-formatted Markdown response to the user.`
+
 function localApiPlugin(): Plugin {
   return {
     name: 'local-api-middleware',
@@ -43,6 +60,7 @@ function localApiPlugin(): Plugin {
             res.setHeader('X-Accel-Buffering', 'no')
 
             let body: Record<string, unknown> & {
+              agentMode?: boolean
               messages?: Array<{ role: 'user' | 'assistant'; content: string }>
             } = {}
             try {
@@ -56,6 +74,7 @@ function localApiPlugin(): Plugin {
 
             const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
               body.messages || []
+            const agentMode = body.agentMode !== false
 
             if (!apiKey || apiKey === 'your-gemini-api-key') {
               const notice =
@@ -84,7 +103,17 @@ function localApiPlugin(): Plugin {
 
               const contents = context.map((m) => ({
                 role: (m.role === 'assistant' ? 'model' : 'user') as 'user' | 'model',
-                parts: [{ text: m.content }],
+                parts: [
+                  {
+                    text:
+                      m.role === 'assistant'
+                        ? m.content
+                            .replace(/<think>[\s\S]*?<\/think>/g, '')
+                            .replace(/<task(?:\s+title="[^"]*")?\s*>[\s\S]*?<\/task>/g, '')
+                            .trim() || m.content
+                        : m.content,
+                  },
+                ],
               }))
 
               // Ensure starts with user
@@ -101,6 +130,11 @@ function localApiPlugin(): Plugin {
                   responseStream = await ai.models.generateContentStream({
                     model: candidateModel,
                     contents,
+                    config: agentMode
+                      ? {
+                          systemInstruction: AGENT_LOOP_SYSTEM_PROMPT,
+                        }
+                      : undefined,
                   })
                   break
                 } catch (err: unknown) {

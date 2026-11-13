@@ -16,6 +16,8 @@ interface ChatWorkspaceProps {
   onSelectPrompt: (prompt: string) => void
   isGenerating: boolean
   streamingMessage?: string
+  agentMode?: boolean
+  onToggleAgentMode?: () => void
 }
 
 export function ChatWorkspace({
@@ -29,6 +31,8 @@ export function ChatWorkspace({
   onSelectPrompt,
   isGenerating,
   streamingMessage,
+  agentMode = true,
+  onToggleAgentMode,
 }: ChatWorkspaceProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -87,7 +91,13 @@ export function ChatWorkspace({
             {/* Streaming indicator when waiting for first token */}
             {isGenerating && !streamingMessage && (
               <div className="mx-auto max-w-3xl px-4 py-2">
-                <StreamingIndicator />
+                <StreamingIndicator
+                  text={
+                    agentMode
+                      ? 'Agent is initializing thinking & task loop...'
+                      : 'Gemini is thinking...'
+                  }
+                />
               </div>
             )}
           </div>
@@ -102,6 +112,8 @@ export function ChatWorkspace({
           onSend={onSend}
           onStop={onStop}
           isGenerating={isGenerating}
+          agentMode={agentMode}
+          onToggleAgentMode={onToggleAgentMode}
         />
       </div>
     </div>

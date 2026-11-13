@@ -4,6 +4,7 @@ interface StreamChatOptions {
   conversationId: string
   messageContent: string
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
+  agentMode?: boolean
   signal?: AbortSignal
   onChunk: (text: string) => void
   onDone: (messageId: string, fullText: string) => void
@@ -38,6 +39,7 @@ export const chatApi = {
     conversationId,
     messageContent,
     messages,
+    agentMode = true,
     signal,
     onChunk,
     onDone,
@@ -63,6 +65,7 @@ export const chatApi = {
           conversationId,
           messageContent,
           messages,
+          agentMode,
         }),
         signal,
       })
@@ -124,6 +127,7 @@ export const chatApi = {
   async regenerateChat({
     conversationId,
     messages,
+    agentMode = true,
     signal,
     onChunk,
     onDone,
@@ -147,6 +151,7 @@ export const chatApi = {
         body: JSON.stringify({
           conversationId,
           messages,
+          agentMode,
         }),
         signal,
       })
