@@ -17,3 +17,4 @@ describe('cn utility', () => {
     expect(cn('base', isHidden && 'hidden', isActive && 'active', null, undefined)).toBe('base active')
   })
 })
+

@@ -64,3 +64,4 @@ export async function verifyConversationOwnership(
 
   return !error && !!data
 }
+

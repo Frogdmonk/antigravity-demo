@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
-import { getGeminiClient, formatGeminiContents, type ChatMessageInput } from './_lib/gemini'
+import {
+  getGeminiClient,
+  formatGeminiContents,
+  generateStreamWithFallback,
+  type ChatMessageInput,
+} from './_lib/gemini'
 import {
   authenticateServerRequest,
   verifyConversationOwnership,
@@ -70,10 +75,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { client, model } = getGeminiClient()
     const contents = formatGeminiContents(messages as ChatMessageInput[])
 
-    const responseStream = await client.models.generateContentStream({
+    const { responseStream, usedModel } = await generateStreamWithFallback(
+      client,
       model,
-      contents,
-    })
+      contents
+    )
 
     for await (const chunk of responseStream) {
       if (isAborted) {
@@ -107,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         role: 'assistant',
         content: fullResponse,
         status,
-        model,
+        model: usedModel,
       })
 
       await supabase

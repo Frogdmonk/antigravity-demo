@@ -61,7 +61,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
         role: 'assistant',
         content: streamingMessage,
         status: 'interrupted',
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
@@ -135,7 +135,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
           role: 'assistant',
           content: fullText,
           status: 'completed',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.5-flash',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -154,7 +154,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
           role: 'assistant',
           content: partialText,
           status: 'interrupted',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.5-flash',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -206,7 +206,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
           role: 'assistant',
           content: fullText,
           status: 'completed',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.5-flash',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -231,7 +231,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
           role: 'assistant',
           content: partialText,
           status: 'interrupted',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.5-flash',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -295,7 +295,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
           role: 'assistant',
           content: fullText,
           status: 'completed',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.5-flash',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -314,7 +314,7 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
           role: 'assistant',
           content: partialText,
           status: 'interrupted',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.5-flash',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -344,3 +344,4 @@ export function useChat({ conversationId, onCreateConversation }: UseChatProps) 
     error,
   }
 }
+

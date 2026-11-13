@@ -16,3 +16,4 @@ export function StreamingIndicator({ text = 'Gemini is thinking...' }: { text?: 
     </div>
   )
 }
+

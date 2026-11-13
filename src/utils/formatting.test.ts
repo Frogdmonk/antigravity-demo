@@ -39,3 +39,4 @@ describe('formatTimestamp', () => {
     expect(formatTimestamp('not-a-date')).toBe('')
   })
 })
+

@@ -4,6 +4,13 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { GoogleGenAI } from '@google/genai'
 
+const FALLBACK_MODELS = [
+  'gemini-3.5-flash',
+  'gemini-3.8-flash',
+  'gemini-3.6-flash',
+  'gemini-3.1-flash-lite',
+]
+
 function localApiPlugin(): Plugin {
   return {
     name: 'local-api-middleware',
@@ -15,7 +22,9 @@ function localApiPlugin(): Plugin {
 
         const env = loadEnv(server.config.mode, process.cwd(), '')
         const apiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''
-        const model = env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+        const rawModel = env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash'
+        const preferredModel =
+          rawModel === 'gemini-2.5-flash' ? 'gemini-3.5-flash' : rawModel
 
         // 1. POST /api/chat or POST /api/chat/regenerate
         if (
@@ -33,7 +42,9 @@ function localApiPlugin(): Plugin {
             res.setHeader('Connection', 'keep-alive')
             res.setHeader('X-Accel-Buffering', 'no')
 
-            let body: Record<string, unknown> & { messages?: Array<{ role: 'user' | 'assistant'; content: string }> } = {}
+            let body: Record<string, unknown> & {
+              messages?: Array<{ role: 'user' | 'assistant'; content: string }>
+            } = {}
             try {
               body = JSON.parse(bodyStr)
             } catch {
@@ -47,7 +58,6 @@ function localApiPlugin(): Plugin {
               body.messages || []
 
             if (!apiKey || apiKey === 'your-gemini-api-key') {
-              // Graceful notification in development if GEMINI_API_KEY is not yet supplied
               const notice =
                 '⚠️ **Gemini API Key Required**\n\nTo receive live responses from Google Gemini, please add your `GEMINI_API_KEY` to the `.env` file in the project root.\n\nGet your free key at [Google AI Studio](https://aistudio.google.com/).'
               res.write(`data: ${JSON.stringify({ type: 'chunk', text: notice })}\n\n`)
@@ -73,7 +83,7 @@ function localApiPlugin(): Plugin {
                   : messages
 
               const contents = context.map((m) => ({
-                role: m.role === 'assistant' ? 'model' : 'user',
+                role: (m.role === 'assistant' ? 'model' : 'user') as 'user' | 'model',
                 parts: [{ text: m.content }],
               }))
 
@@ -82,10 +92,34 @@ function localApiPlugin(): Plugin {
                 contents.shift()
               }
 
-              const responseStream = await ai.models.generateContentStream({
-                model,
-                contents,
-              })
+              const modelsToTry = Array.from(new Set([preferredModel, ...FALLBACK_MODELS]))
+              let responseStream: Awaited<ReturnType<typeof ai.models.generateContentStream>> | null = null
+              let lastError: unknown = null
+
+              for (const candidateModel of modelsToTry) {
+                try {
+                  responseStream = await ai.models.generateContentStream({
+                    model: candidateModel,
+                    contents,
+                  })
+                  break
+                } catch (err: unknown) {
+                  lastError = err
+                  const msg = err instanceof Error ? err.message : String(err)
+                  const isRetryable =
+                    msg.includes('404') ||
+                    msg.includes('NOT_FOUND') ||
+                    msg.includes('503') ||
+                    msg.includes('UNAVAILABLE') ||
+                    msg.includes('no longer available') ||
+                    msg.includes('high demand')
+                  if (!isRetryable) throw err
+                }
+              }
+
+              if (!responseStream) {
+                throw lastError || new Error('All Gemini models are currently unavailable.')
+              }
 
               let fullText = ''
               for await (const chunk of responseStream) {
